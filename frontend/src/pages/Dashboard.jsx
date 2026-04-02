@@ -105,11 +105,11 @@ export default function Dashboard() {
                         <form onSubmit={handleAddExpense}>
                             <div className="form-group">
                                 <label className="form-label">Title</label>
-                                <input type="text" className="form-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Grocery" required />
+                                <input type="text" className="form-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="Name" required />
                             </div>
                             <div className="form-group">
                                 <label className="form-label">Amount (₹)</label>
-                                <input type="number" className="form-input" value={amount} onChange={e => setAmount(e.target.value)} placeholder="e.g. 500" required />
+                                <input type="number" className="form-input" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount" required />
                             </div>
                             <div className="form-group">
                                 <label className="form-label">Type</label>
