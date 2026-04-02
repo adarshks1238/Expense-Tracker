@@ -2,6 +2,8 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import Expense from '../models/Expense.js';
+import Category from '../models/Category.js';
 import { protect } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -46,6 +48,18 @@ router.post('/login', async (req, res) => {
 
 router.get('/me', protect, (req, res) => {
     res.json(req.user);
+});
+
+router.delete('/me', protect, async (req, res) => {
+    try {
+        // Delete all data associated with the user
+        await Expense.deleteMany({ user: req.user.id });
+        await Category.deleteMany({ user: req.user.id });
+        await User.findByIdAndDelete(req.user.id);
+        res.json({ message: 'Profile deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
 });
 
 export default router;

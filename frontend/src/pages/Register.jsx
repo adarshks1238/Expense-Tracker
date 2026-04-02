@@ -22,8 +22,15 @@ export default function Register() {
     };
 
     return (
-        <div className="auth-container">
-            <div className="auth-card">
+        <div className="auth-layout">
+            <div className="auth-banner">
+                <div className="auth-banner-content">
+                    <h1 className="auth-banner-title">Start Your<br/>Journey.</h1>
+                    <p className="auth-banner-text">Join thousands of users who are already managing their money smarter and growing their savings.</p>
+                </div>
+            </div>
+            <div className="auth-form-container">
+                <div className="auth-card">
                 <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem', color: 'var(--primary)' }}>
                     <UserPlus size={48} />
                 </div>
@@ -39,7 +46,7 @@ export default function Register() {
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             required
-                            placeholder="John Doe"
+                            placeholder="Enter your name"
                         />
                     </div>
                     <div className="form-group">
@@ -50,8 +57,7 @@ export default function Register() {
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             required
-                            placeholder="john@example.com"
-                        />
+                            placeholder="Enter your email" />
                     </div>
                     <div className="form-group">
                         <label className="form-label">Password</label>
@@ -64,11 +70,12 @@ export default function Register() {
                             placeholder="Create a strong password"
                         />
                     </div>
-                    <button type="submit" className="btn btn-primary" style={{ marginTop: '1rem' }}>Sign Up</button>
+                    <button type="submit" className="btn btn-primary" style={{ marginTop: '1rem', padding: '0.875rem' }}>Sign Up</button>
                 </form>
                 <p className="text-center mt-4 text-muted">
                     Already have an account? <Link to="/login" className="text-primary" style={{ fontWeight: 'bold' }}>Login</Link>
                 </p>
+                </div>
             </div>
         </div>
     );
