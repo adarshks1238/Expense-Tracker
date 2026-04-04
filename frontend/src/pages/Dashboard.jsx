@@ -1,6 +1,7 @@
 import { useEffect, useState, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
-import { IndianRupee, LogOut, PlusCircle, TrendingUp, TrendingDown, Wallet, Trash2, Edit2, UserX, User } from 'lucide-react';
+import { ThemeContext } from '../context/ThemeContext';
+import { Moon, Sun, IndianRupee, LogOut, PlusCircle, TrendingUp, TrendingDown, Wallet, Trash2, Edit2, UserX, User } from 'lucide-react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title } from 'chart.js';
 import { Pie, Line } from 'react-chartjs-2';
 
@@ -8,6 +9,7 @@ ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointE
 
 export default function Dashboard() {
     const { user, logout, api } = useContext(AuthContext);
+    const { theme, toggleTheme } = useContext(ThemeContext);
     const [expenses, setExpenses] = useState([]);
     const [summary, setSummary] = useState({ categorySummary: [], monthlySummary: [] });
     const [categories, setCategories] = useState([]);
@@ -183,6 +185,13 @@ export default function Dashboard() {
                     ExpenseTracker
                 </div>
                 <div className="nav-links" style={{ display: 'flex', alignItems: 'center' }}>
+                    <button 
+                        onClick={toggleTheme} 
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', borderRadius: '50%', background: 'transparent', color: 'var(--primary)', border: '1px solid var(--border)', cursor: 'pointer', marginRight: '1rem', transition: 'background-color 0.2s' }}
+                        title="Toggle Theme"
+                    >
+                        {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+                    </button>
                     <span style={{ textTransform: 'capitalize', marginRight: '1rem' }}>Welcome, {user?.name}</span>
                     <div style={{ position: 'relative' }}>
                         <button 
