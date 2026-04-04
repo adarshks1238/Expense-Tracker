@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { LogIn } from 'lucide-react';
 
 export default function Login() {
-    const [email, setEmail] = useState('');
+    const [userId, setUserId] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const { login } = useContext(AuthContext);
@@ -13,7 +13,7 @@ export default function Login() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            await login(email, password);
+            await login(userId, password);
             navigate('/');
         } catch (err) {
             setError(err.response?.data?.message || 'Failed to login');
@@ -38,14 +38,14 @@ export default function Login() {
                     {error && <div style={{ color: 'var(--danger)', marginBottom: '1rem', textAlign: 'center', background: 'rgba(239, 68, 68, 0.1)', padding: '0.5rem', borderRadius: '0.5rem' }}>{error}</div>}
                     <form onSubmit={handleSubmit}>
                         <div className="form-group">
-                            <label className="form-label">Email</label>
+                            <label className="form-label">User ID</label>
                             <input
-                                type="email"
+                                type="text"
                                 className="form-input"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
+                                value={userId}
+                                onChange={(e) => setUserId(e.target.value)}
                                 required
-                                placeholder="Enter your email"
+                                placeholder="Enter your User ID"
                             />
                         </div>
                         <div className="form-group">
