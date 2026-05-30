@@ -1,9 +1,11 @@
 import { useEffect, useState, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { ThemeContext } from '../context/ThemeContext';
-import { Moon, Sun, IndianRupee, LogOut, PlusCircle, TrendingUp, TrendingDown, Wallet, Trash2, Edit2, UserX, User } from 'lucide-react';
+import { Moon, Sun, IndianRupee, LogOut, PlusCircle, TrendingUp, TrendingDown, Wallet, Trash2, Edit2, UserX, User, Download, ChevronDown, ChevronRight } from 'lucide-react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title } from 'chart.js';
 import { Pie, Line } from 'react-chartjs-2';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title);
 
@@ -16,9 +18,13 @@ export default function Dashboard() {
     const [amount, setAmount] = useState('');
     const [type, setType] = useState('debit');
     const [category, setCategory] = useState('');
+    const [paymentMethod, setPaymentMethod] = useState('Account');
     const [editingId, setEditingId] = useState(null);
     const [newCategoryName, setNewCategoryName] = useState('');
     const [dropdownOpen, setDropdownOpen] = useState(false);
+    const [transactionFilter, setTransactionFilter] = useState('All');
+    const [showCategories, setShowCategories] = useState(false);
+    const [showTransactions, setShowTransactions] = useState(false);
 
     useEffect(() => {
         fetchData();
@@ -33,20 +39,20 @@ export default function Dashboard() {
             ]);
             setExpenses(expRes.data);
             setCategories(catRes.data);
-            
+
             // Default categories if nothing exists
             if (catRes.data.length === 0) {
-               const defaultCategories = ['Food', 'Transport', 'Utilities', 'Entertainment', 'Shopping', 'Salary', 'Other'];
-               for (let cat of defaultCategories) {
-                   await api.post('/categories', { name: cat });
-               }
-               const updatedCats = await api.get('/categories');
-               setCategories(updatedCats.data);
-               setCategory(updatedCats.data[0].name);
+                const defaultCategories = ['Food', 'Transport', 'Utilities', 'Entertainment', 'Shopping', 'Salary', 'Other'];
+                for (let cat of defaultCategories) {
+                    await api.post('/categories', { name: cat });
+                }
+                const updatedCats = await api.get('/categories');
+                setCategories(updatedCats.data);
+                setCategory(updatedCats.data[0].name);
             } else if (!category) {
                 setCategory(catRes.data[0].name);
             }
-            
+
             setSummary(sumRes.data);
         } catch (err) {
             console.error(err);
@@ -61,7 +67,8 @@ export default function Dashboard() {
                 const res = await api.put(`/expenses/${editingId}`, {
                     amount: Number(amount),
                     type,
-                    category
+                    category,
+                    paymentMethod
                 });
                 setExpenses(expenses.map(ex => ex._id === editingId ? res.data : ex));
                 setEditingId(null);
@@ -69,14 +76,15 @@ export default function Dashboard() {
                 const res = await api.post('/expenses', {
                     amount: Number(amount),
                     type,
-                    category
+                    category,
+                    paymentMethod
                 });
                 // Fetch data to re-sort newly added expenses
                 const expRes = await api.get('/expenses');
                 setExpenses(expRes.data);
             }
             setAmount('');
-            
+
             // Refresh summary
             const sumRes = await api.get('/expenses/summary');
             setSummary(sumRes.data);
@@ -90,6 +98,7 @@ export default function Dashboard() {
         setAmount(expense.amount);
         setType(expense.type);
         setCategory(expense.category);
+        setPaymentMethod(expense.paymentMethod || 'Account');
     };
 
     const handleDelete = async (id) => {
@@ -142,11 +151,100 @@ export default function Dashboard() {
         }
     };
 
-    const totalCredit = expenses.filter(e => e.type === 'credit').reduce((acc, curr) => acc + curr.amount, 0);
-    const totalDebit = expenses.filter(e => e.type === 'debit').reduce((acc, curr) => acc + curr.amount, 0);
-    const balance = totalCredit - totalDebit;
+    const accountExpenses = expenses.filter(e => e.paymentMethod === 'Account' || !e.paymentMethod);
+    const accountCredit = accountExpenses.filter(e => e.type === 'credit').reduce((acc, curr) => acc + curr.amount, 0);
+    const accountDebit = accountExpenses.filter(e => e.type === 'debit').reduce((acc, curr) => acc + curr.amount, 0);
+    const accountBalance = accountCredit - accountDebit;
+
+    const cashExpenses = expenses.filter(e => e.paymentMethod === 'Cash');
+    const cashCredit = cashExpenses.filter(e => e.type === 'credit').reduce((acc, curr) => acc + curr.amount, 0);
+    const cashDebit = cashExpenses.filter(e => e.type === 'debit').reduce((acc, curr) => acc + curr.amount, 0);
+    const cashBalance = cashCredit - cashDebit;
+
+    const totalCredit = accountCredit + cashCredit;
+    const totalDebit = accountDebit + cashDebit;
+    const balance = accountBalance + cashBalance;
 
     const formatINR = (val) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(val);
+    const formatPDFMoney = (val) => 'Rs. ' + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const generatePDF = () => {
+        const doc = new jsPDF();
+
+        doc.setFontSize(22);
+        doc.text('Expense Tracker - Financial Report', 14, 22);
+
+        doc.setFontSize(14);
+        doc.text(`Generated For: ${user?.name || 'User'}`, 14, 34);
+
+        doc.setFontSize(12);
+        doc.text('--- Overview ---', 14, 44);
+        doc.text(`Total Net Worth: ${formatPDFMoney(balance)}`, 14, 52);
+        doc.text(`Account Balance: ${formatPDFMoney(accountBalance)}`, 14, 60);
+        doc.text(`Cash in Hand: ${formatPDFMoney(cashBalance)}`, 14, 68);
+        doc.text(`Total Credit: ${formatPDFMoney(totalCredit)}`, 14, 76);
+        doc.text(`Total Debit: ${formatPDFMoney(totalDebit)}`, 14, 84);
+
+        // Category Summary Table
+        doc.text('--- Expenses by Category ---', 14, 96);
+        const categoryData = summary.categorySummary.map(s => [
+            s._id, formatPDFMoney(s.total)
+        ]);
+        autoTable(doc, {
+            startY: 100,
+            head: [['Category', 'Total Spent']],
+            body: categoryData,
+        });
+
+        // Monthly Summary Table
+        let finalY = doc.lastAutoTable.finalY || 120;
+        doc.text('--- Monthly Expenses Trend ---', 14, finalY + 10);
+        const monthNamesPDF = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const monthlyData = summary.monthlySummary.filter(s => s._id.type === 'debit').map(s => [
+            `${monthNamesPDF[s._id.month - 1]} ${s._id.year}`, formatPDFMoney(s.total)
+        ]);
+        autoTable(doc, {
+            startY: finalY + 14,
+            head: [['Month', 'Total Spent']],
+            body: monthlyData,
+        });
+
+        // All Transactions Table
+        finalY = doc.lastAutoTable.finalY || finalY + 30;
+
+        // Add a new page if the table will overflow the first page or is drawn too close to bottom
+        if (finalY > 250) {
+            doc.addPage();
+            finalY = 10;
+        }
+
+        doc.text('--- Full Transaction History ---', 14, finalY + 10);
+
+        const tableData = expenses.map(expense => [
+            new Date(expense.date).toLocaleDateString(),
+            expense.category,
+            expense.type === 'credit' ? 'Income' : 'Expense',
+            expense.paymentMethod || 'Account',
+            formatPDFMoney(expense.amount)
+        ]);
+
+        autoTable(doc, {
+            startY: finalY + 14,
+            head: [['Date', 'Category', 'Type', 'Method', 'Amount']],
+            body: tableData,
+        });
+
+        doc.save(`${user?.name || 'My'}_Expense_Report.pdf`);
+    };
+
+    const filteredTransactions = expenses.filter(expense => {
+        if (transactionFilter === 'All') return true;
+        if (transactionFilter === 'Cash') return expense.paymentMethod === 'Cash';
+        if (transactionFilter === 'Account') return expense.paymentMethod === 'Account' || !expense.paymentMethod;
+        if (transactionFilter === 'Income') return expense.type === 'credit';
+        if (transactionFilter === 'Expense') return expense.type === 'debit';
+        return true;
+    });
 
     // Chart Data
     const pieData = {
@@ -185,8 +283,8 @@ export default function Dashboard() {
                     ExpenseTracker
                 </div>
                 <div className="nav-links" style={{ display: 'flex', alignItems: 'center' }}>
-                    <button 
-                        onClick={toggleTheme} 
+                    <button
+                        onClick={toggleTheme}
                         style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', borderRadius: '50%', background: 'transparent', color: 'var(--primary)', border: '1px solid var(--border)', cursor: 'pointer', marginRight: '1rem', transition: 'background-color 0.2s' }}
                         title="Toggle Theme"
                     >
@@ -194,14 +292,14 @@ export default function Dashboard() {
                     </button>
                     <span style={{ textTransform: 'capitalize', marginRight: '1rem' }}>Welcome, {user?.name}</span>
                     <div style={{ position: 'relative' }}>
-                        <button 
-                            onClick={() => setDropdownOpen(!dropdownOpen)} 
+                        <button
+                            onClick={() => setDropdownOpen(!dropdownOpen)}
                             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', borderRadius: '50%', background: 'var(--primary)', color: 'var(--btn-text)', border: 'none', cursor: 'pointer', transition: 'transform 0.2s', transform: dropdownOpen ? 'scale(0.95)' : 'scale(1)' }}
                             title="Profile Options"
                         >
                             <User size={20} />
                         </button>
-                        
+
                         {dropdownOpen && (
                             <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '0.5rem', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '0.5rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', minWidth: '160px', zIndex: 10, overflow: 'hidden' }}>
                                 <button onClick={logout} style={{ width: '100%', display: 'flex', alignItems: 'center', padding: '0.75rem 1rem', border: 'none', background: 'transparent', color: 'var(--text-light)', cursor: 'pointer', borderBottom: '1px solid var(--border)', textAlign: 'left', fontSize: '0.875rem' }}>
@@ -221,40 +319,51 @@ export default function Dashboard() {
                     <h1 className="dashboard-title">Overview</h1>
                 </div>
 
-                <div className="stats-grid">
+                <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+                    <div className="stat-card" style={{ borderColor: 'var(--primary)', background: 'linear-gradient(180deg, var(--bg-card) 0%, rgba(59, 130, 246, 0.05) 100%)' }}>
+                        <h3 className="stat-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)' }}>
+                            <Wallet size={16} /> Account Balance
+                        </h3>
+                        <p className="stat-value" style={{ color: 'var(--primary)' }}>{formatINR(accountBalance)}</p>
+                    </div>
+                    <div className="stat-card" style={{ borderColor: '#F59E0B', background: 'linear-gradient(180deg, var(--bg-card) 0%, rgba(245, 158, 11, 0.05) 100%)' }}>
+                        <h3 className="stat-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#F59E0B' }}>
+                            <IndianRupee size={16} /> Cash in Hand
+                        </h3>
+                        <p className="stat-value" style={{ color: '#F59E0B' }}>{formatINR(cashBalance)}</p>
+                    </div>
                     <div className="stat-card">
                         <h3 className="stat-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <Wallet size={16} /> Total Balance
+                            <Wallet size={16} /> Total Net Worth
                         </h3>
                         <p className="stat-value">{formatINR(balance)}</p>
                     </div>
-                    <div className="stat-card" style={{ borderColor: 'var(--success)', background: 'linear-gradient(180deg, var(--bg-card) 0%, rgba(16, 185, 129, 0.05) 100%)' }}>
-                        <h3 className="stat-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--success)' }}>
-                            <TrendingUp size={16} /> Total Credit
-                        </h3>
-                        <p className="stat-value text-success">{formatINR(totalCredit)}</p>
+                </div>
+
+                <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginBottom: '2rem' }}>
+                    <div className="stat-card" style={{ padding: '1rem', borderColor: 'var(--success)' }}>
+                        <h3 className="stat-title" style={{ color: 'var(--success)', fontSize: '0.75rem', margin: 0 }}>Total Credit</h3>
+                        <p className="stat-value text-success" style={{ fontSize: '1.25rem' }}>{formatINR(totalCredit)}</p>
                     </div>
-                    <div className="stat-card" style={{ borderColor: 'var(--danger)', background: 'linear-gradient(180deg, var(--bg-card) 0%, rgba(239, 68, 68, 0.05) 100%)' }}>
-                        <h3 className="stat-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--danger)' }}>
-                            <TrendingDown size={16} /> Total Debit
-                        </h3>
-                        <p className="stat-value text-danger">{formatINR(totalDebit)}</p>
+                    <div className="stat-card" style={{ padding: '1rem', borderColor: 'var(--danger)' }}>
+                        <h3 className="stat-title" style={{ color: 'var(--danger)', fontSize: '0.75rem', margin: 0 }}>Total Debit</h3>
+                        <p className="stat-value text-danger" style={{ fontSize: '1.25rem' }}>{formatINR(totalDebit)}</p>
                     </div>
                 </div>
 
                 {/* Charts Section */}
                 <div className="content-grid" style={{ marginBottom: '2rem' }}>
                     <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'hidden' }}>
-                         <h2 className="card-title">Expenses by Category</h2>
-                         {summary.categorySummary.length > 0 ? 
-                             <div style={{ width: '100%', maxWidth: '300px', height: '300px', position: 'relative' }}><Pie data={pieData} options={{ maintainAspectRatio: false }} /></div> 
-                             : <p style={{ color: 'var(--text-muted)' }}>No expenses to chart.</p>}
+                        <h2 className="card-title">Expenses by Category</h2>
+                        {summary.categorySummary.length > 0 ?
+                            <div style={{ width: '100%', maxWidth: '300px', height: '300px', position: 'relative' }}><Pie data={pieData} options={{ maintainAspectRatio: false }} /></div>
+                            : <p style={{ color: 'var(--text-muted)' }}>No expenses to chart.</p>}
                     </div>
                     <div className="card" style={{ overflow: 'hidden' }}>
-                         <h2 className="card-title">Monthly Trends</h2>
-                         {debitByMonth.length > 0 ? 
-                             <div style={{ height: '300px', width: '100%', position: 'relative' }}><Line data={lineData} options={{ maintainAspectRatio: false }} /></div> 
-                             : <p style={{ color: 'var(--text-muted)' }}>No monthly trend available.</p>}
+                        <h2 className="card-title">Monthly Trends</h2>
+                        {debitByMonth.length > 0 ?
+                            <div style={{ height: '300px', width: '100%', position: 'relative' }}><Line data={lineData} options={{ maintainAspectRatio: false }} /></div>
+                            : <p style={{ color: 'var(--text-muted)' }}>No monthly trend available.</p>}
                     </div>
                 </div>
 
@@ -266,12 +375,21 @@ export default function Dashboard() {
                                 <label className="form-label">Amount (₹)</label>
                                 <input type="number" className="form-input" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount" required />
                             </div>
-                            <div className="form-group">
-                                <label className="form-label">Type</label>
-                                <select className="form-select" value={type} onChange={e => setType(e.target.value)}>
-                                    <option value="debit">Debit (Expense)</option>
-                                    <option value="credit">Credit (Income)</option>
-                                </select>
+                            <div className="form-group" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <div>
+                                    <label className="form-label">Type</label>
+                                    <select className="form-select" value={type} onChange={e => setType(e.target.value)}>
+                                        <option value="debit">Debit (Expense)</option>
+                                        <option value="credit">Credit (Income)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="form-label">Method</label>
+                                    <select className="form-select" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
+                                        <option value="Account">Account (Bank/Card)</option>
+                                        <option value="Cash">Cash in Hand</option>
+                                    </select>
+                                </div>
                             </div>
                             <div className="form-group">
                                 <label className="form-label">Category</label>
@@ -281,7 +399,7 @@ export default function Dashboard() {
                                 </select>
                             </div>
                             <button type="submit" className="btn btn-primary" style={{ marginTop: '1rem', width: '100%' }}>
-                                {editingId ? <Edit2 size={20} style={{ marginRight: '0.5rem' }} /> : <PlusCircle size={20} style={{ marginRight: '0.5rem' }} />} 
+                                {editingId ? <Edit2 size={20} style={{ marginRight: '0.5rem' }} /> : <PlusCircle size={20} style={{ marginRight: '0.5rem' }} />}
                                 {editingId ? 'Update Transaction' : 'Add Transaction'}
                             </button>
                             {editingId && (
@@ -291,52 +409,95 @@ export default function Dashboard() {
                             )}
                         </form>
 
-                        <hr style={{ borderColor: 'var(--border)', margin: '2rem 0' }} />
+                        <div style={{ marginTop: '2rem', borderTop: '1px solid var(--border)', paddingTop: '1.5rem' }}>
+                            <button
+                                type="button"
+                                onClick={() => setShowCategories(!showCategories)}
+                                style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'transparent', border: 'none', color: 'var(--text-light)', cursor: 'pointer', padding: '0.5rem 0' }}
+                            >
+                                <h2 className="card-title" style={{ margin: 0, padding: 0, border: 'none' }}>Manage Categories</h2>
+                                {showCategories ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                            </button>
 
-                        <h2 className="card-title">Manage Categories</h2>
-                        <form onSubmit={handleAddCategory} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-                             <input type="text" className="form-input" style={{ flex: 1, minWidth: '150px' }} value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} placeholder="New Category" required />
-                             <button type="submit" className="btn btn-primary" style={{ width: 'auto' }}>Add</button>
-                        </form>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                            {categories.map(cat => (
-                                <span key={cat._id} style={{ background: 'var(--bg-body)', padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', border: '1px solid var(--border)' }}>
-                                    {cat.name}
-                                    <button onClick={(e) => handleDeleteCategory(cat._id, e)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 0 }}>&times;</button>
-                                </span>
-                            ))}
+                            {showCategories && (
+                                <div style={{ marginTop: '1.5rem', animation: 'fadeIn 0.3s ease' }}>
+                                    <form onSubmit={handleAddCategory} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                                        <input type="text" className="form-input" style={{ flex: 1, minWidth: '150px' }} value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} placeholder="New Category" required />
+                                        <button type="submit" className="btn btn-primary" style={{ width: 'auto' }}>Add</button>
+                                    </form>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                        {categories.map(cat => (
+                                            <span key={cat._id} style={{ background: 'var(--bg-body)', padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', border: '1px solid var(--border)' }}>
+                                                {cat.name}
+                                                <button onClick={(e) => handleDeleteCategory(cat._id, e)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 0 }}>&times;</button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 
                     <div className="card">
-                        <h2 className="card-title">Recent Transactions</h2>
-                        {expenses.length === 0 ? (
-                            <p style={{ color: 'var(--text-muted)' }}>No transactions found. Start adding some!</p>
-                        ) : (
-                            <div className="expense-list">
-                                {expenses.map(expense => (
-                                    <div key={expense._id} className="expense-item" style={{ borderLeft: `4px solid ${expense.type === 'credit' ? 'var(--success)' : 'var(--danger)'}` }}>
-                                        <div className="expense-info">
-                                            <span className="expense-title">{expense.category}</span>
-                                            <span className="expense-meta">
-                                                {expense.type === 'credit' ? 'Income' : 'Expense'} • {new Date(expense.date).toLocaleDateString()}
-                                            </span>
-                                        </div>
-                                        <div className="expense-amount" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                            <span style={{ color: expense.type === 'credit' ? 'var(--success)' : 'var(--danger)', fontWeight: 'bold' }}>
-                                                {expense.type === 'credit' ? '+' : '-'}{formatINR(expense.amount)}
-                                            </span>
-                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                <button className="delete-btn" style={{ color: 'var(--text-muted)' }} onClick={() => handleEditClick(expense)}>
-                                                    <Edit2 size={18} />
-                                                </button>
-                                                <button className="delete-btn" onClick={() => handleDelete(expense._id)}>
-                                                    <Trash2 size={18} />
-                                                </button>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showTransactions ? '1.5rem' : '0', paddingBottom: showTransactions ? '0.75rem' : '0', borderBottom: showTransactions ? '1px solid var(--border)' : 'none' }}>
+                            <button
+                                type="button"
+                                onClick={() => setShowTransactions(!showTransactions)}
+                                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'transparent', border: 'none', color: 'var(--text-light)', cursor: 'pointer', padding: 0 }}
+                            >
+                                <h2 className="card-title" style={{ margin: 0, padding: 0, border: 'none' }}>Recent Transactions</h2>
+                                {showTransactions ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                            </button>
+                            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                <select
+                                    className="form-select"
+                                    style={{ padding: '0.4rem 0.8rem', fontSize: '0.875rem', width: 'auto' }}
+                                    value={transactionFilter}
+                                    onChange={(e) => setTransactionFilter(e.target.value)}
+                                >
+                                    <option value="All">All...</option>
+                                    <option value="Cash">Cash Only</option>
+                                    <option value="Account">Acct Only</option>
+                                    <option value="Income">Income</option>
+                                    <option value="Expense">Expense</option>
+                                </select>
+                                <button onClick={generatePDF} className="btn btn-primary" style={{ display: 'flex', gap: '0.5rem', padding: '0.5rem 1rem', fontSize: '0.875rem', width: 'auto' }} title="Download Summary PDF">
+                                    <Download size={16} /> PDF
+                                </button>
+                            </div>
+                        </div>
+
+                        {showTransactions && (
+                            <div style={{ animation: 'fadeIn 0.3s ease' }}>
+                                {filteredTransactions.length === 0 ? (
+                                    <p style={{ color: 'var(--text-muted)' }}>No transactions found for the applied filter.</p>
+                                ) : (
+                                    <div className="expense-list">
+                                        {filteredTransactions.map(expense => (
+                                            <div key={expense._id} className="expense-item" style={{ borderLeft: `4px solid ${expense.type === 'credit' ? 'var(--success)' : 'var(--danger)'}` }}>
+                                                <div className="expense-info">
+                                                    <span className="expense-title">{expense.category}</span>
+                                                    <span className="expense-meta">
+                                                        {expense.type === 'credit' ? 'Income' : 'Expense'} • {expense.paymentMethod || 'Account'} • {new Date(expense.date).toLocaleDateString()}
+                                                    </span>
+                                                </div>
+                                                <div className="expense-amount" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                                    <span style={{ color: expense.type === 'credit' ? 'var(--success)' : 'var(--danger)', fontWeight: 'bold' }}>
+                                                        {expense.type === 'credit' ? '+' : '-'}{formatINR(expense.amount)}
+                                                    </span>
+                                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                        <button className="delete-btn" style={{ color: 'var(--text-muted)' }} onClick={() => handleEditClick(expense)}>
+                                                            <Edit2 size={18} />
+                                                        </button>
+                                                        <button className="delete-btn" onClick={() => handleDelete(expense._id)}>
+                                                            <Trash2 size={18} />
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             </div>
-                                        </div>
+                                        ))}
                                     </div>
-                                ))}
+                                )}
                             </div>
                         )}
                     </div>

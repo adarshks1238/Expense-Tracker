@@ -52,13 +52,14 @@ router.get('/summary', protect, async (req, res) => {
 // Add a new expense
 router.post('/', protect, async (req, res) => {
     try {
-        const { amount, type, category, date } = req.body;
+        const { amount, type, category, date, paymentMethod } = req.body;
         const expense = new Expense({
             user: req.user.id,
             amount,
             type,
             category,
-            date: date || Date.now()
+            date: date || Date.now(),
+            paymentMethod: paymentMethod || 'Account'
         });
         const createdExpense = await expense.save();
         res.status(201).json(createdExpense);
