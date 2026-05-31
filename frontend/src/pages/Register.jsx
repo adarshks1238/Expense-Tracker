@@ -55,8 +55,8 @@ export default function Register() {
 
     return (
         <div className="auth-layout" style={{ position: 'relative' }}>
-            <button 
-                onClick={toggleTheme} 
+            <button
+                onClick={toggleTheme}
                 style={{ position: 'absolute', top: '1rem', right: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', borderRadius: '50%', background: 'var(--bg-card)', color: 'var(--text-light)', border: '1px solid var(--border)', cursor: 'pointer', zIndex: 10 }}
                 title="Toggle Theme"
             >
