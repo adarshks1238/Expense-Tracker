@@ -10,7 +10,7 @@ export const AuthProvider = ({ children }) => {
 
     // Axios instance for authorized requests
     const api = axios.create({
-        baseURL: 'http://localhost:5000/api',
+        baseURL: '/api',
     });
 
     api.interceptors.request.use(config => {
@@ -41,14 +41,14 @@ export const AuthProvider = ({ children }) => {
     };
 
     const login = async (userId, password) => {
-        const res = await axios.post('http://localhost:5000/api/auth/login', { userId, password });
+        const res = await axios.post('/api/auth/login', { userId, password });
         localStorage.setItem('token', res.data.token);
         setToken(res.data.token);
         setUser(res.data.user);
     };
 
     const register = async (name, userId, password) => {
-        const res = await axios.post('http://localhost:5000/api/auth/register', { name, userId, password });
+        const res = await axios.post('/api/auth/register', { name, userId, password });
         localStorage.setItem('token', res.data.token);
         setToken(res.data.token);
         setUser(res.data.user);

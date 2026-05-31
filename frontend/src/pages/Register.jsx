@@ -22,7 +22,7 @@ export default function Register() {
         }
         setIdStatus('checking');
         try {
-            const res = await axios.post('http://localhost:5000/api/auth/check-userid', { userId: id });
+            const res = await axios.post('/api/auth/check-userid', { userId: id });
             setIdStatus(res.data.available ? 'available' : 'taken');
         } catch (err) {
             setIdStatus(null);

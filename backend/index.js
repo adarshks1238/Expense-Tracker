@@ -19,11 +19,16 @@ app.use('/api/categories', categoryRoutes);
 
 const PORT = process.env.PORT || 5000;
 
+// Connect to MongoDB immediately at the top level
 mongoose.connect(process.env.MONGODB_URI)
-    .then(() => {
-        console.log('Connected to MongoDB');
-        app.listen(PORT, () => {
-            console.log(`Server running on port ${PORT}`);
-        });
-    })
-    .catch((error) => console.log('MongoDB connection error:', error.message));
+    .then(() => console.log('Connected to MongoDB'))
+    .catch((error) => console.error('MongoDB connection error:', error.message));
+
+// Only listen when running locally, not in Vercel's serverless environment
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+    });
+}
+
+export default app;
