@@ -340,6 +340,7 @@ export default function Dashboard() {
                     </div>
                 </div>
 
+
                 <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginBottom: '2rem' }}>
                     <div className="stat-card" style={{ padding: '1rem', borderColor: 'var(--success)' }}>
                         <h3 className="stat-title" style={{ color: 'var(--success)', fontSize: '0.75rem', margin: 0 }}>Total Credit</h3>
@@ -351,6 +352,75 @@ export default function Dashboard() {
                     </div>
                 </div>
 
+                <div className="card" style={{ marginBottom: '2rem' }}>
+                    <h2 className="card-title">{editingId ? 'Edit Transaction' : 'Add New Transaction'}</h2>
+                    <form onSubmit={handleAddOrEditExpense}>
+                        <div className="form-group">
+                            <label className="form-label">Amount (₹)</label>
+                            <input type="number" className="form-input" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount" required />
+                        </div>
+                        <div className="form-group" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                            <div>
+                                <label className="form-label">Type</label>
+                                <select className="form-select" value={type} onChange={e => setType(e.target.value)}>
+                                    <option value="debit">Debit (Expense)</option>
+                                    <option value="credit">Credit (Income)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="form-label">Method</label>
+                                <select className="form-select" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
+                                    <option value="Account">Account (Bank/Card)</option>
+                                    <option value="Cash">Cash in Hand</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Category</label>
+                            <select className="form-select" value={category} onChange={e => setCategory(e.target.value)} required>
+                                <option value="" disabled>Select category</option>
+                                {categories.map(cat => <option key={cat._id} value={cat.name}>{cat.name}</option>)}
+                            </select>
+                        </div>
+                        <button type="submit" className="btn btn-primary" style={{ marginTop: '1rem', width: '100%' }}>
+                            {editingId ? <Edit2 size={20} style={{ marginRight: '0.5rem' }} /> : <PlusCircle size={20} style={{ marginRight: '0.5rem' }} />}
+                            {editingId ? 'Update Transaction' : 'Add Transaction'}
+                        </button>
+                        {editingId && (
+                            <button type="button" onClick={() => { setEditingId(null); setAmount(''); }} className="btn" style={{ marginTop: '0.5rem', width: '100%', background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)' }}>
+                                Cancel Edit
+                            </button>
+                        )}
+                    </form>
+
+                    <div style={{ marginTop: '2rem', borderTop: '1px solid var(--border)', paddingTop: '1.5rem' }}>
+                        <button
+                            type="button"
+                            onClick={() => setShowCategories(!showCategories)}
+                            style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'transparent', border: 'none', color: 'var(--text-light)', cursor: 'pointer', padding: '0.5rem 0' }}
+                        >
+                            <h2 className="card-title" style={{ margin: 0, padding: 0, border: 'none' }}>Manage Categories</h2>
+                            {showCategories ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                        </button>
+
+                        {showCategories && (
+                            <div style={{ marginTop: '1.5rem', animation: 'fadeIn 0.3s ease' }}>
+                                <form onSubmit={handleAddCategory} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                                    <input type="text" className="form-input" style={{ flex: 1, minWidth: '150px' }} value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} placeholder="New Category" required />
+                                    <button type="submit" className="btn btn-primary" style={{ width: 'auto' }}>Add</button>
+                                </form>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                    {categories.map(cat => (
+                                        <span key={cat._id} style={{ background: 'var(--bg-body)', padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', border: '1px solid var(--border)' }}>
+                                            {cat.name}
+                                            <button onClick={(e) => handleDeleteCategory(cat._id, e)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 0 }}>&times;</button>
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
                 {/* Charts Section */}
                 <div className="content-grid" style={{ marginBottom: '2rem' }}>
                     <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'hidden' }}>
@@ -368,76 +438,6 @@ export default function Dashboard() {
                 </div>
 
                 <div className="content-grid">
-                    <div className="card">
-                        <h2 className="card-title">{editingId ? 'Edit Transaction' : 'Add New Transaction'}</h2>
-                        <form onSubmit={handleAddOrEditExpense}>
-                            <div className="form-group">
-                                <label className="form-label">Amount (₹)</label>
-                                <input type="number" className="form-input" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount" required />
-                            </div>
-                            <div className="form-group" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                <div>
-                                    <label className="form-label">Type</label>
-                                    <select className="form-select" value={type} onChange={e => setType(e.target.value)}>
-                                        <option value="debit">Debit (Expense)</option>
-                                        <option value="credit">Credit (Income)</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="form-label">Method</label>
-                                    <select className="form-select" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
-                                        <option value="Account">Account (Bank/Card)</option>
-                                        <option value="Cash">Cash in Hand</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">Category</label>
-                                <select className="form-select" value={category} onChange={e => setCategory(e.target.value)} required>
-                                    <option value="" disabled>Select category</option>
-                                    {categories.map(cat => <option key={cat._id} value={cat.name}>{cat.name}</option>)}
-                                </select>
-                            </div>
-                            <button type="submit" className="btn btn-primary" style={{ marginTop: '1rem', width: '100%' }}>
-                                {editingId ? <Edit2 size={20} style={{ marginRight: '0.5rem' }} /> : <PlusCircle size={20} style={{ marginRight: '0.5rem' }} />}
-                                {editingId ? 'Update Transaction' : 'Add Transaction'}
-                            </button>
-                            {editingId && (
-                                <button type="button" onClick={() => { setEditingId(null); setAmount(''); }} className="btn" style={{ marginTop: '0.5rem', width: '100%', background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)' }}>
-                                    Cancel Edit
-                                </button>
-                            )}
-                        </form>
-
-                        <div style={{ marginTop: '2rem', borderTop: '1px solid var(--border)', paddingTop: '1.5rem' }}>
-                            <button
-                                type="button"
-                                onClick={() => setShowCategories(!showCategories)}
-                                style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'transparent', border: 'none', color: 'var(--text-light)', cursor: 'pointer', padding: '0.5rem 0' }}
-                            >
-                                <h2 className="card-title" style={{ margin: 0, padding: 0, border: 'none' }}>Manage Categories</h2>
-                                {showCategories ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
-                            </button>
-
-                            {showCategories && (
-                                <div style={{ marginTop: '1.5rem', animation: 'fadeIn 0.3s ease' }}>
-                                    <form onSubmit={handleAddCategory} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-                                        <input type="text" className="form-input" style={{ flex: 1, minWidth: '150px' }} value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} placeholder="New Category" required />
-                                        <button type="submit" className="btn btn-primary" style={{ width: 'auto' }}>Add</button>
-                                    </form>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                                        {categories.map(cat => (
-                                            <span key={cat._id} style={{ background: 'var(--bg-body)', padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem', border: '1px solid var(--border)' }}>
-                                                {cat.name}
-                                                <button onClick={(e) => handleDeleteCategory(cat._id, e)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 0 }}>&times;</button>
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
                     <div className="card">
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showTransactions ? '1.5rem' : '0', paddingBottom: showTransactions ? '0.75rem' : '0', borderBottom: showTransactions ? '1px solid var(--border)' : 'none' }}>
                             <button
