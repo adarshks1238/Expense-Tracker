@@ -6,7 +6,7 @@ const expenseSchema = new mongoose.Schema({
     type: { type: String, enum: ['credit', 'debit'], required: true },
     date: { type: Date, required: true, default: Date.now },
     category: { type: String, required: true },
-    paymentMethod: { type: String, enum: ['Cash', 'Account'], required: true, default: 'Account' },
+    paymentMethod: { type: String, required: true, default: 'Account' },
 }, { timestamps: true });
 
 export default mongoose.model('Expense', expenseSchema);

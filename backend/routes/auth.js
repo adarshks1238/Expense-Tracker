@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import Expense from '../models/Expense.js';
 import Category from '../models/Category.js';
+import BankAccount from '../models/BankAccount.js';
 import { protect } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -71,6 +72,7 @@ router.delete('/me', protect, async (req, res) => {
         // Delete all data associated with the user
         await Expense.deleteMany({ user: req.user.id });
         await Category.deleteMany({ user: req.user.id });
+        await BankAccount.deleteMany({ user: req.user.id });
         await User.findByIdAndDelete(req.user.id);
         res.json({ message: 'Profile deleted successfully' });
     } catch (error) {

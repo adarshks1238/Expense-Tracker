@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/auth.js';
 import expenseRoutes from './routes/expenses.js';
 import categoryRoutes from './routes/categories.js';
+import bankAccountRoutes from './routes/bankAccounts.js';
 
 dotenv.config();
 
@@ -26,6 +27,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/bank-accounts', bankAccountRoutes);
 
 const PORT = process.env.PORT || 5000;
 

@@ -23,19 +23,35 @@ export default function Dashboard() {
     const [showCategories, setShowCategories] = useState(false);
     const [showTransactions, setShowTransactions] = useState(false);
 
+    const [bankAccounts, setBankAccounts] = useState([]);
+    const [newBankName, setNewBankName] = useState('');
+    const [newBankDigits, setNewBankDigits] = useState('');
+    const [showBankAccounts, setShowBankAccounts] = useState(false);
+
     useEffect(() => {
         fetchData();
     }, []);
 
     const fetchData = async () => {
         try {
-            const [expRes, catRes, sumRes] = await Promise.all([
+            const [expRes, catRes, sumRes, bankRes] = await Promise.all([
                 api.get('/expenses'),
                 api.get('/categories'),
-                api.get('/expenses/summary')
+                api.get('/expenses/summary'),
+                api.get('/bank-accounts')
             ]);
             setExpenses(expRes.data);
             setCategories(catRes.data);
+            setBankAccounts(bankRes.data);
+
+            const primaryAcc = bankRes.data.find(b => b.isPrimary);
+            if (primaryAcc) {
+                setPaymentMethod(`${primaryAcc.bankName} - ${primaryAcc.lastFiveDigits}`);
+            } else if (bankRes.data.length > 0) {
+                setPaymentMethod(`${bankRes.data[0].bankName} - ${bankRes.data[0].lastFiveDigits}`);
+            } else {
+                setPaymentMethod('Cash');
+            }
 
             // Default categories if nothing exists
             if (catRes.data.length === 0) {
@@ -136,8 +152,69 @@ export default function Dashboard() {
         }
     };
 
+    const handleAddBankAccount = async (e) => {
+        e.preventDefault();
+        if (!newBankName || !newBankDigits) return;
+        if (newBankDigits.length !== 5 || !/^\d+$/.test(newBankDigits)) {
+            alert("Account number last digits must be exactly 5 numbers.");
+            return;
+        }
+        try {
+            await api.post('/bank-accounts', {
+                bankName: newBankName,
+                lastFiveDigits: newBankDigits
+            });
+            setNewBankName('');
+            setNewBankDigits('');
+            await fetchData();
+        } catch (error) {
+            console.error(error);
+            alert("Failed to add bank account.");
+        }
+    };
+
+    const handleDeleteBankAccount = async (id, e) => {
+        e.preventDefault();
+        const targetAcc = bankAccounts.find(acc => acc._id === id);
+        if (!targetAcc) return;
+        const targetLabel = `${targetAcc.bankName} - ${targetAcc.lastFiveDigits}`;
+        
+        if (!window.confirm("Are you sure you want to remove this bank account? Transactions associated with this account will remain, but the account will be removed from your list.")) return;
+        try {
+            await api.delete(`/bank-accounts/${id}`);
+            const updatedAccounts = bankAccounts.filter(acc => acc._id !== id);
+            setBankAccounts(updatedAccounts);
+            
+            // Fallback selected method if the deleted one was currently selected
+            if (paymentMethod === targetLabel) {
+                const primaryAcc = updatedAccounts.find(b => b.isPrimary);
+                if (primaryAcc) {
+                    setPaymentMethod(`${primaryAcc.bankName} - ${primaryAcc.lastFiveDigits}`);
+                } else if (updatedAccounts.length > 0) {
+                    setPaymentMethod(`${updatedAccounts[0].bankName} - ${updatedAccounts[0].lastFiveDigits}`);
+                } else {
+                    setPaymentMethod('Cash');
+                }
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Failed to delete bank account.");
+        }
+    };
+
+    const handleSetPrimaryBankAccount = async (id, e) => {
+        e.preventDefault();
+        try {
+            await api.put(`/bank-accounts/${id}/primary`);
+            await fetchData();
+        } catch (error) {
+            console.error(error);
+            alert("Failed to set primary bank account.");
+        }
+    };
+
     const handleDeleteProfile = async () => {
-        if (window.confirm("WARNING: Are you sure you want to permanently delete your profile? All your expenses and categories will be lost forever. This cannot be undone.")) {
+        if (window.confirm("WARNING: Are you sure you want to permanently delete your profile? All your expenses, categories and bank accounts will be lost forever. This cannot be undone.")) {
             try {
                 await api.delete('/auth/me');
                 logout(); // Logout user after deleting profile
@@ -148,19 +225,42 @@ export default function Dashboard() {
         }
     };
 
-    const accountExpenses = expenses.filter(e => e.paymentMethod === 'Account' || !e.paymentMethod);
-    const accountCredit = accountExpenses.filter(e => e.type === 'credit').reduce((acc, curr) => acc + curr.amount, 0);
-    const accountDebit = accountExpenses.filter(e => e.type === 'debit').reduce((acc, curr) => acc + curr.amount, 0);
-    const accountBalance = accountCredit - accountDebit;
-
     const cashExpenses = expenses.filter(e => e.paymentMethod === 'Cash');
     const cashCredit = cashExpenses.filter(e => e.type === 'credit').reduce((acc, curr) => acc + curr.amount, 0);
     const cashDebit = cashExpenses.filter(e => e.type === 'debit').reduce((acc, curr) => acc + curr.amount, 0);
     const cashBalance = cashCredit - cashDebit;
 
+    const accountExpenses = expenses.filter(e => e.paymentMethod !== 'Cash');
+    const accountCredit = accountExpenses.filter(e => e.type === 'credit').reduce((acc, curr) => acc + curr.amount, 0);
+    const accountDebit = accountExpenses.filter(e => e.type === 'debit').reduce((acc, curr) => acc + curr.amount, 0);
+    const accountBalance = accountCredit - accountDebit;
+
     const totalCredit = accountCredit + cashCredit;
     const totalDebit = accountDebit + cashDebit;
     const balance = accountBalance + cashBalance;
+
+    // Calculate individual bank balances
+    const bankBalances = {};
+    bankAccounts.forEach(bank => {
+        const key = `${bank.bankName} - ${bank.lastFiveDigits}`;
+        bankBalances[key] = 0;
+    });
+
+    let defaultAccountBalance = 0;
+
+    expenses.forEach(e => {
+        if (e.paymentMethod === 'Cash') return;
+        const amountVal = e.type === 'credit' ? e.amount : -e.amount;
+        
+        if (e.paymentMethod in bankBalances) {
+            bankBalances[e.paymentMethod] += amountVal;
+        } else if (e.paymentMethod === 'Account' || !e.paymentMethod) {
+            defaultAccountBalance += amountVal;
+        } else {
+            // Keep deleted bank accounts in lists to preserve matching totals
+            bankBalances[e.paymentMethod] = (bankBalances[e.paymentMethod] || 0) + amountVal;
+        }
+    });
 
     const formatINR = (val) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(val);
     const formatPDFMoney = (val) => 'Rs. ' + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -323,7 +423,28 @@ export default function Dashboard() {
                         <h3 className="stat-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)' }}>
                             <Wallet size={16} /> Account Balance
                         </h3>
-                        <p className="stat-value" style={{ color: 'var(--primary)' }}>{formatINR(accountBalance)}</p>
+                        <p className="stat-value" style={{ color: 'var(--primary)', marginBottom: '0.5rem' }}>{formatINR(accountBalance)}</p>
+                        
+                        {(bankAccounts.length > 0 || defaultAccountBalance !== 0) && (
+                            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.5rem', marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.8rem' }}>
+                                {Object.entries(bankBalances).map(([accountName, accBal]) => (
+                                    <div key={accountName} style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
+                                        <span>{accountName}</span>
+                                        <span style={{ fontWeight: '600', color: accBal >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                                            {formatINR(accBal)}
+                                        </span>
+                                    </div>
+                                ))}
+                                {defaultAccountBalance !== 0 && (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
+                                        <span>Default Account</span>
+                                        <span style={{ fontWeight: '600', color: defaultAccountBalance >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                                            {formatINR(defaultAccountBalance)}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                     <div className="stat-card" style={{ borderColor: '#F59E0B', background: 'linear-gradient(180deg, var(--bg-card) 0%, rgba(245, 158, 11, 0.05) 100%)' }}>
                         <h3 className="stat-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#F59E0B' }}>
@@ -369,8 +490,15 @@ export default function Dashboard() {
                             <div>
                                 <label className="form-label">Method</label>
                                 <select className="form-select" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
-                                    <option value="Account">Account (Bank/Card)</option>
                                     <option value="Cash">Cash in Hand</option>
+                                    {bankAccounts.map(bank => {
+                                        const valueStr = `${bank.bankName} - ${bank.lastFiveDigits}`;
+                                        return (
+                                            <option key={bank._id} value={valueStr}>
+                                                {bank.bankName} (*{bank.lastFiveDigits})
+                                            </option>
+                                        );
+                                    })}
                                 </select>
                             </div>
                         </div>
@@ -386,7 +514,7 @@ export default function Dashboard() {
                             {editingId ? 'Update Transaction' : 'Add Transaction'}
                         </button>
                         {editingId && (
-                            <button type="button" onClick={() => { setEditingId(null); setAmount(''); }} className="btn" style={{ marginTop: '0.5rem', width: '100%', background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)' }}>
+                            <button type="button" onClick={() => { setEditingId(null); setAmount(''); const primaryAcc = bankAccounts.find(b => b.isPrimary); if (primaryAcc) { setPaymentMethod(`${primaryAcc.bankName} - ${primaryAcc.lastFiveDigits}`); } else if (bankAccounts.length > 0) { setPaymentMethod(`${bankAccounts[0].bankName} - ${bankAccounts[0].lastFiveDigits}`); } else { setPaymentMethod('Cash'); } }} className="btn" style={{ marginTop: '0.5rem', width: '100%', background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)' }}>
                                 Cancel Edit
                             </button>
                         )}
@@ -414,6 +542,82 @@ export default function Dashboard() {
                                             {cat.name}
                                             <button onClick={(e) => handleDeleteCategory(cat._id, e)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 0 }}>&times;</button>
                                         </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div style={{ marginTop: '1rem', borderTop: '1px solid var(--border)', paddingTop: '1.5rem' }}>
+                        <button
+                            type="button"
+                            onClick={() => setShowBankAccounts(!showBankAccounts)}
+                            style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'transparent', border: 'none', color: 'var(--text-light)', cursor: 'pointer', padding: '0.5rem 0' }}
+                        >
+                            <h2 className="card-title" style={{ margin: 0, padding: 0, border: 'none' }}>Manage Bank Accounts</h2>
+                            {showBankAccounts ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                        </button>
+
+                        {showBankAccounts && (
+                            <div style={{ marginTop: '1.5rem', animation: 'fadeIn 0.3s ease' }}>
+                                <form onSubmit={handleAddBankAccount} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                                    <input 
+                                        type="text" 
+                                        className="form-input" 
+                                        style={{ flex: 2, minWidth: '150px' }} 
+                                        value={newBankName} 
+                                        onChange={e => setNewBankName(e.target.value)} 
+                                        placeholder="Bank Name (e.g. SBI)" 
+                                        required 
+                                    />
+                                    <input 
+                                        type="text" 
+                                        className="form-input" 
+                                        style={{ flex: 1, minWidth: '120px' }} 
+                                        value={newBankDigits} 
+                                        onChange={e => {
+                                            const val = e.target.value.replace(/\D/g, '').slice(0, 5);
+                                            setNewBankDigits(val);
+                                        }} 
+                                        placeholder="Last 5 Digits" 
+                                        maxLength="5"
+                                        required 
+                                    />
+                                    <button type="submit" className="btn btn-primary" style={{ width: 'auto' }}>Add Account</button>
+                                </form>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                    {bankAccounts.map(bank => (
+                                        <div key={bank._id} style={{ background: 'var(--bg-dark)', padding: '0.75rem 1rem', borderRadius: '8px', fontSize: '0.875rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid var(--border)' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                <span style={{ fontWeight: '600', color: 'var(--text-light)' }}>
+                                                    {bank.bankName} (*{bank.lastFiveDigits})
+                                                </span>
+                                                {bank.isPrimary ? (
+                                                    <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#F59E0B', padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                                        ★ Primary
+                                                    </span>
+                                                ) : (
+                                                    <button 
+                                                        onClick={(e) => handleSetPrimaryBankAccount(bank._id, e)} 
+                                                        style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.75rem', padding: '0.1rem 0.4rem', borderRadius: '4px', border: '1px solid var(--border)', transition: 'all 0.2s' }}
+                                                        title="Set as Primary Account"
+                                                        onMouseEnter={e => e.target.style.color = '#F59E0B'}
+                                                        onMouseLeave={e => e.target.style.color = 'var(--text-muted)'}
+                                                    >
+                                                        Set Primary
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <button 
+                                                onClick={(e) => handleDeleteBankAccount(bank._id, e)} 
+                                                style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '0.25rem', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px', transition: 'background-color 0.2s' }}
+                                                title="Delete Bank Account"
+                                                onMouseEnter={e => e.target.style.background = 'rgba(220, 38, 38, 0.1)'}
+                                                onMouseLeave={e => e.target.style.background = 'transparent'}
+                                            >
+                                                &times;
+                                            </button>
+                                        </div>
                                     ))}
                                 </div>
                             </div>
