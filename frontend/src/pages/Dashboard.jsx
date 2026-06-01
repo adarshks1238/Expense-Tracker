@@ -2,12 +2,9 @@ import { useEffect, useState, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { ThemeContext } from '../context/ThemeContext';
 import { Moon, Sun, IndianRupee, LogOut, PlusCircle, TrendingUp, TrendingDown, Wallet, Trash2, Edit2, UserX, User, Download, ChevronDown, ChevronRight } from 'lucide-react';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title } from 'chart.js';
-import { Pie, Line } from 'react-chartjs-2';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title);
 
 export default function Dashboard() {
     const { user, logout, api } = useContext(AuthContext);
@@ -246,34 +243,36 @@ export default function Dashboard() {
         return true;
     });
 
-    // Chart Data
-    const pieData = {
-        labels: summary.categorySummary.map(s => s._id),
-        datasets: [
-            {
-                data: summary.categorySummary.map(s => s.total),
-                backgroundColor: [
-                    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#E7E9ED', '#8A2BE2'
-                ],
-            },
-        ],
-    };
+    // Calculate monthly expense by category breakdown
+    const monthlyCategoryBreakdown = {};
+    expenses.forEach(exp => {
+        if (exp.type !== 'debit') return;
+        
+        const dateObj = new Date(exp.date);
+        const year = dateObj.getFullYear();
+        const month = dateObj.getMonth(); // 0-11
+        
+        const key = `${year}-${month}`;
+        if (!monthlyCategoryBreakdown[key]) {
+            monthlyCategoryBreakdown[key] = {
+                year,
+                month,
+                total: 0,
+                categories: {}
+            };
+        }
+        
+        const catName = exp.category || 'Other';
+        monthlyCategoryBreakdown[key].categories[catName] = (monthlyCategoryBreakdown[key].categories[catName] || 0) + exp.amount;
+        monthlyCategoryBreakdown[key].total += exp.amount;
+    });
 
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const debitByMonth = summary.monthlySummary.filter(s => s._id.type === 'debit');
-
-    const lineData = {
-        labels: debitByMonth.map(s => `${monthNames[s._id.month - 1]} ${s._id.year}`),
-        datasets: [
-            {
-                label: 'Monthly Expenses',
-                data: debitByMonth.map(s => s.total),
-                fill: false,
-                borderColor: '#EF4444',
-                tension: 0.1
-            }
-        ]
-    };
+    
+    const sortedMonthsBreakdown = Object.values(monthlyCategoryBreakdown).sort((a, b) => {
+        if (a.year !== b.year) return b.year - a.year;
+        return b.month - a.month;
+    });
 
     return (
         <div className="dashboard-layout">
@@ -359,7 +358,7 @@ export default function Dashboard() {
                             <label className="form-label">Amount (₹)</label>
                             <input type="number" className="form-input" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount" required />
                         </div>
-                        <div className="form-group" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div className="form-group form-grid">
                             <div>
                                 <label className="form-label">Type</label>
                                 <select className="form-select" value={type} onChange={e => setType(e.target.value)}>
@@ -421,33 +420,73 @@ export default function Dashboard() {
                         )}
                     </div>
                 </div>
-                {/* Charts Section */}
-                <div className="content-grid" style={{ marginBottom: '2rem' }}>
-                    <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'hidden' }}>
-                        <h2 className="card-title">Expenses by Category</h2>
-                        {summary.categorySummary.length > 0 ?
-                            <div style={{ width: '100%', maxWidth: '300px', height: '300px', position: 'relative' }}><Pie data={pieData} options={{ maintainAspectRatio: false }} /></div>
-                            : <p style={{ color: 'var(--text-muted)' }}>No expenses to chart.</p>}
-                    </div>
-                    <div className="card" style={{ overflow: 'hidden' }}>
-                        <h2 className="card-title">Monthly Trends</h2>
-                        {debitByMonth.length > 0 ?
-                            <div style={{ height: '300px', width: '100%', position: 'relative' }}><Line data={lineData} options={{ maintainAspectRatio: false }} /></div>
-                            : <p style={{ color: 'var(--text-muted)' }}>No monthly trend available.</p>}
-                    </div>
+                {/* Monthly Expenses breakdown by category (Value-based cards) */}
+                <div className="card" style={{ marginBottom: '2rem' }}>
+                    <h2 className="card-title">Monthly Expenses by Category</h2>
+                    {sortedMonthsBreakdown.length === 0 ? (
+                        <p style={{ color: 'var(--text-muted)' }}>No expenses recorded yet.</p>
+                    ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' }}>
+                            {sortedMonthsBreakdown.map(monthData => (
+                                <div 
+                                    key={`${monthData.year}-${monthData.month}`} 
+                                    style={{ 
+                                        background: 'var(--bg-dark)', 
+                                        borderRadius: '0.75rem', 
+                                        padding: '1.25rem', 
+                                        border: '1px solid var(--border)',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '0.75rem'
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px dashed var(--border)', paddingBottom: '0.5rem' }}>
+                                        <span style={{ fontWeight: '700', fontSize: '1.1rem', color: 'var(--text-light)' }}>
+                                            {monthNames[monthData.month]} {monthData.year}
+                                        </span>
+                                        <span style={{ color: 'var(--danger)', fontWeight: 'bold', fontSize: '1rem', background: 'rgba(220, 38, 38, 0.1)', padding: '0.2rem 0.6rem', borderRadius: '1rem' }}>
+                                            {formatINR(monthData.total)}
+                                        </span>
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                        {Object.entries(monthData.categories)
+                                            .sort((a, b) => b[1] - a[1]) // Sort categories by expense amount descending
+                                            .map(([catName, catAmount]) => {
+                                                const percent = ((catAmount / monthData.total) * 100).toFixed(0);
+                                                return (
+                                                    <div key={catName} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.9rem' }}>
+                                                            <span style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                                                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)' }}></span>
+                                                                {catName}
+                                                            </span>
+                                                            <span style={{ fontWeight: '600', color: 'var(--text-light)' }}>
+                                                                {formatINR(catAmount)} <span style={{ fontSize: '0.75rem', fontWeight: 'normal', color: 'var(--text-muted)' }}>({percent}%)</span>
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ width: '100%', height: '4px', background: 'var(--border)', borderRadius: '2px', overflow: 'hidden' }}>
+                                                            <div style={{ width: `${percent}%`, height: '100%', background: 'var(--danger)', borderRadius: '2px' }}></div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
-                <div className="content-grid">
-                    <div className="card">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showTransactions ? '1.5rem' : '0', paddingBottom: showTransactions ? '0.75rem' : '0', borderBottom: showTransactions ? '1px solid var(--border)' : 'none' }}>
-                            <button
-                                type="button"
-                                onClick={() => setShowTransactions(!showTransactions)}
-                                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'transparent', border: 'none', color: 'var(--text-light)', cursor: 'pointer', padding: 0 }}
-                            >
-                                <h2 className="card-title" style={{ margin: 0, padding: 0, border: 'none' }}>Recent Transactions</h2>
-                                {showTransactions ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
-                            </button>
+                <div className="card">
+                    <div className="transaction-header" style={{ marginBottom: showTransactions ? '1.5rem' : '0', paddingBottom: showTransactions ? '0.75rem' : '0', borderBottom: showTransactions ? '1px solid var(--border)' : 'none' }}>
+                        <button
+                            type="button"
+                            onClick={() => setShowTransactions(!showTransactions)}
+                            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'transparent', border: 'none', color: 'var(--text-light)', cursor: 'pointer', padding: 0 }}
+                        >
+                            <h2 className="card-title" style={{ margin: 0, padding: 0, border: 'none' }}>Recent Transactions</h2>
+                            {showTransactions ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                        </button>
                             <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                                 <select
                                     className="form-select"
@@ -500,7 +539,6 @@ export default function Dashboard() {
                                 )}
                             </div>
                         )}
-                    </div>
                 </div>
             </main>
         </div>

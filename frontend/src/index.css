@@ -515,3 +515,38 @@ a {
   color: var(--danger);
   background: rgba(239, 68, 68, 0.1);
 }
+
+/* Responsive Form Grid */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 576px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+}
+
+/* Responsive Transaction Header */
+.transaction-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+@media (max-width: 768px) {
+  .transaction-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+}
+
+/* Global Transitions for smooth layout transfer */
+body, .header, .main-content, .card, .stat-card, .btn, .form-input, .form-select, .nav-links button, .expense-item {
+  transition: all 0.3s ease;
+}
+
